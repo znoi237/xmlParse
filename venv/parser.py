@@ -1,5 +1,9 @@
 import xml.etree.cElementTree as ET
 import xlrd, xlwt
+import os
+import shutil
+
+
 
 
 
@@ -18,6 +22,7 @@ ip = ""
 port = ""
 countCopys=0
 premission = False
+stepRename = 0
 
 # Перебираем елементы верхнего уровня в массиве элементов root
 for elem in root:
@@ -37,14 +42,19 @@ for elem in root:
 readWorkbook = xlrd.open_workbook('conf.xls', formatting_info=True)
 # выбираем активный лист
 sheet = readWorkbook.sheet_by_index(0)
-coontRows = sheet.nrows
+# Определяем количество строк в xls файле
+countRows = sheet.nrows
 
-print("countCopys " + str(countCopys) + " coontRows " + str(coontRows))
-if countCopys == coontRows:
-    print("Количество скопированных элементов NIFI равно количеству строк в xls источнике. Продолжаем работу.")
+print("countCopys " + str(countCopys) + " countRows " + str(countRows))
+if countCopys == countRows:
+    print("Количество скопированных элементов NIFI равно количеству строк в xls источнике.")
     premission = True
-if countCopys > coontRows:
-    print("Количество скопированных элементов NIFI больше количества строк в xls источнике")
+if countCopys > countRows:
+    print("Внимание!!! Количество скопированных элементов NIFI больше количества строк в xls источнике. Продолжаем работу.")
+    premission = True
+if countCopys < countRows:
+    print("Внимание!!! Количество скопированных элементов NIFI меньше количества строк в xls источнике. Продолжаем работу.")
+    premission = True
 
 if premission:
     # Перебираем елементы верхнего уровня в массиве элементов root
@@ -65,6 +75,7 @@ if premission:
 
                     # Ищем текст "Copy of " в имени элементов четвёртого уровня эелементов root
                     if "Copy of " in str(sub3.text):
+                        stepRename = stepRename+1
                         # открываем файл источник на чтение
                         readWorkbook = xlrd.open_workbook('conf.xls', formatting_info=True)
                         # выбираем активный лист
@@ -72,14 +83,36 @@ if premission:
                         # Определяе цвет строки
                         for numRow in range(sheet.nrows):
                             rowColor = str(readWorkbook.colour_map[sheet.cell(i, 1).xf_index])
-                            # print("each color "+rowColor)
-
                             if rowColor == "(0, 204, 255)":
+                                ###############################################################
+
+                                bookWrite = xlwt.Workbook()
+                                sheetWrite = bookWrite.add_sheet('Sheet 1')
+                                for y in range((i+1), countRows):
+                                    cell = xlwt.easyxf('pattern: pattern solid;')
+                                    cell.pattern.pattern_fore_colour = 1
+                                    sheetWrite.write(y, 0, str(sheet.row_values(y)[0]), cell)
+                                    sheetWrite.write(y, 1, (str(sheet.row_values(y)[1]).split("."))[0], cell)
+                                    sheetWrite.write(y, 2, str(sheet.row_values(y)[2]), cell)
+                                    sheetWrite.write(y, 3, (str(sheet.row_values(y)[3]).split("."))[0], cell)
+                                    sheetWrite.write(y, 4, str(sheet.row_values(y)[4]), cell)
+                                    sheetWrite.write(y, 5, str(sheet.row_values(y)[5]), cell)
+                                for x in range(0, i+1):
+                                    cell = xlwt.easyxf('pattern: pattern solid;')
+                                    cell.pattern.pattern_fore_colour = 42
+                                    sheetWrite.write(x, 0, str(sheet.row_values(x)[0]), cell)
+                                    sheetWrite.write(x, 1, (str(sheet.row_values(x)[1]).split("."))[0], cell)
+                                    sheetWrite.write(x, 2, str(sheet.row_values(x)[2]), cell)
+                                    sheetWrite.write(x, 3, (str(sheet.row_values(x)[3]).split("."))[0], cell)
+                                    sheetWrite.write(x, 4, str(sheet.row_values(x)[4]), cell)
+                                    sheetWrite.write(x, 5, str(sheet.row_values(x)[5]), cell)
+                                bookWrite.save('modified.xls')
+
+                                ###############################################################
                                 print("white line " + str(numRow) + " i " + str(i))
                                 break
-                            i = i + 1
-                        # print(i)
-                        # записываем в переменные значения из источника(БД)
+                            i = i + 1 # !!!!!!!!!!!!!! Изменить на определение строки элемента без заливки!!!!!!!!!
+                        # записываем в переменные значения из источника(xls)
                         code = (str(sheet.row_values(i)[1]).split("."))[0]
                         name = ("mm" + code)
                         ip = str(sheet.row_values(i)[2])
@@ -87,8 +120,10 @@ if premission:
                         print("i " + str(i) + " code " + code + " name " + name + " ip " + ip + " port " + port)
                         sub3.text=code # меняем имя элемена "Copy of ********" на значение из источника данных
                         print("New name MM: "+sub3.text)
+
+
                         mainNameTrig=True # Активируем тригер, что группа процессоров с именем содержащим "Copy of " найдена
-                        i = i + 1
+                        i = i + 1 # !!!!!!!!!!!!!! Изменить на определение строки элемента без заливки!!!!!!!!!
     # Если тригер true - перебираем элементы пятого уровня в массиве root
                     if mainNameTrig:
                         for sub4 in sub3:
@@ -152,4 +187,9 @@ if premission:
     tree = ET.ElementTree(root)
     with open("updated.xml", "w"): # Открываем файл updated.xml на запись. p.s. этот файл должен находиться в одной папке со скриптом
         tree.write("updated.xml") # Записывае модифицированную структуру массива root в файл updated.xml
-
+    readWorkbook.release_resources()
+    del readWorkbook
+    os.remove('conf.xls')
+    shutil.copyfile("modified.xls", "\src")
+    os.rename('.\src\modified.xls', '.\src\conf.xls')
+    shutil.copyfile(".\src\modified.xls", ".\\")
