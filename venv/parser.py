@@ -15,14 +15,22 @@ import shutil
 tree = ET.parse('flow.xml')
 root = tree.getroot()
 i = 1
+q = 1
+rowColor=''
+countRows=0
+countCopys=0
+premission = False
+stepRename = 0
+godRowCount = 0
+checkRowColor=""
+alarmGodRowCount = False
+breakStep=False
 # объявляем переменные для замены в необходимых элементах массива root
 code = ""
 name = ""
 ip = ""
 port = ""
-countCopys=0
-premission = False
-stepRename = 0
+
 
 # Перебираем елементы верхнего уровня в массиве элементов root
 for elem in root:
@@ -41,19 +49,27 @@ for elem in root:
 # открываем файл источник на чтение
 readWorkbook = xlrd.open_workbook('conf.xls', formatting_info=True)
 # выбираем активный лист
-sheet = readWorkbook.sheet_by_index(0)
+sheet = readWorkbook.sheet_by_name("Sheet1")
 # Определяем количество строк в xls файле
-countRows = sheet.nrows
+countRows = int(sheet.nrows)
 
-print("countCopys " + str(countCopys) + " countRows " + str(countRows))
-if countCopys == countRows:
+for checkNum in range(sheet.nrows):
+    try:
+        checkRowColor = str(readWorkbook.colour_map[sheet.cell(checkNum, 1).xf_index])
+        if (checkRowColor == "(0, 204, 255)") or (checkRowColor == "(192, 192, 192)"):
+            godRowCount = godRowCount + 1
+    except:
+        print("Ошибка открытия файла. Для продолжения корректной работы парсера, необходимо пересохранить conf.xls")
+# print("countCopys " + str(countCopys) + " countRows " + str(countRows))
+if countCopys == godRowCount:
     print("Количество скопированных элементов NIFI равно количеству строк в xls источнике.")
     premission = True
-if countCopys > countRows:
+if countCopys > godRowCount:
     print("Внимание!!! Количество скопированных элементов NIFI больше количества строк в xls источнике. Продолжаем работу.")
     premission = True
-if countCopys < countRows:
+if countCopys < godRowCount:
     print("Внимание!!! Количество скопированных элементов NIFI меньше количества строк в xls источнике. Продолжаем работу.")
+    alarmGodRowCount = True
     premission = True
 
 if premission:
@@ -72,7 +88,8 @@ if premission:
                 websocketTrig = False
     # Перебираем елементы червёртого уровня в массиве элементов root
                 for sub3 in sub2:
-
+                    if breakStep:
+                        break
                     # Ищем текст "Copy of " в имени элементов четвёртого уровня эелементов root
                     if "Copy of " in str(sub3.text):
                         stepRename = stepRename+1
@@ -82,12 +99,20 @@ if premission:
                         sheet = readWorkbook.sheet_by_index(0)
                         # Определяе цвет строки
                         for numRow in range(sheet.nrows):
-                            rowColor = str(readWorkbook.colour_map[sheet.cell(i, 1).xf_index])
-                            if rowColor == "(0, 204, 255)":
+                            try:
+                                rowColor = str(readWorkbook.colour_map[sheet.cell(i, 1).xf_index])
+                                print("rowColor: " + str(rowColor))
+                            except:
+                                print("Ошибка получения элемента листа книги в функции определения строки. ")
+                                print("Служебная информация:")
+                                print("numRow " + str(numRow) + ", i " + str(i) + ", range(sheet.nrows) "
+                                      + str(range(sheet.nrows)) + ", countRows " + str(countRows))
+                            if (rowColor == "(0, 204, 255)") or (rowColor == "(192, 192, 192)"):
+
                                 ###############################################################
 
                                 bookWrite = xlwt.Workbook()
-                                sheetWrite = bookWrite.add_sheet('Sheet 1')
+                                sheetWrite = bookWrite.add_sheet('Sheet1')
                                 for y in range((i+1), countRows):
                                     cell = xlwt.easyxf('pattern: pattern solid;')
                                     cell.pattern.pattern_fore_colour = 1
@@ -99,7 +124,14 @@ if premission:
                                     sheetWrite.write(y, 5, str(sheet.row_values(y)[5]), cell)
                                 for x in range(0, i+1):
                                     cell = xlwt.easyxf('pattern: pattern solid;')
-                                    cell.pattern.pattern_fore_colour = 42
+                                    if (stepRename == godRowCount) and (alarmGodRowCount == True):
+                                        breakStep=True
+                                        cell.pattern.pattern_fore_colour = 2
+                                        print("Чё блять за хуйня творится!?!?!")
+                                        sheetWrite.write(x, 6, "Элементов Copy of в конфигурации NIFI больше чем "
+                                                               "доступных строк в источнике(xls файле)", cell)
+                                    else:
+                                        cell.pattern.pattern_fore_colour = 42
                                     sheetWrite.write(x, 0, str(sheet.row_values(x)[0]), cell)
                                     sheetWrite.write(x, 1, (str(sheet.row_values(x)[1]).split("."))[0], cell)
                                     sheetWrite.write(x, 2, str(sheet.row_values(x)[2]), cell)
@@ -107,20 +139,22 @@ if premission:
                                     sheetWrite.write(x, 4, str(sheet.row_values(x)[4]), cell)
                                     sheetWrite.write(x, 5, str(sheet.row_values(x)[5]), cell)
                                 bookWrite.save('modified.xls')
-
                                 ###############################################################
                                 print("white line " + str(numRow) + " i " + str(i))
                                 break
                             i = i + 1 # !!!!!!!!!!!!!! Изменить на определение строки элемента без заливки!!!!!!!!!
-                        # записываем в переменные значения из источника(xls)
-                        code = (str(sheet.row_values(i)[1]).split("."))[0]
-                        name = ("mm" + code)
-                        ip = str(sheet.row_values(i)[2])
-                        port = (str(sheet.row_values(i)[3]).split("."))[0]
-                        print("i " + str(i) + " code " + code + " name " + name + " ip " + ip + " port " + port)
-                        sub3.text=code # меняем имя элемена "Copy of ********" на значение из источника данных
-                        print("New name MM: "+sub3.text)
-
+                        try:
+                            # записываем в переменные значения из источника(xls)
+                            code = (str(sheet.row_values(i)[1]).split("."))[0]
+                            name = ("mm" + code)
+                            ip = str(sheet.row_values(i)[2])
+                            port = (str(sheet.row_values(i)[3]).split("."))[0]
+                            print("i " + str(i) + " code " + code + " name " + name + " ip " + ip + " port " + port)
+                            sub3.text=code # меняем имя элемена "Copy of ********" на значение из источника данных
+                            print("New name MM: "+sub3.text)
+                        except:
+                            print("Ошибка открытия файла. Для продолжения корректной работы парсера,"
+                                  " необходимо пересохранить conf.xls")
 
                         mainNameTrig=True # Активируем тригер, что группа процессоров с именем содержащим "Copy of " найдена
                         i = i + 1 # !!!!!!!!!!!!!! Изменить на определение строки элемента без заливки!!!!!!!!!
@@ -190,6 +224,5 @@ if premission:
     readWorkbook.release_resources()
     del readWorkbook
     os.remove('conf.xls')
-    shutil.copyfile("modified.xls", "\src")
-    os.rename('.\src\modified.xls', '.\src\conf.xls')
-    shutil.copyfile(".\src\modified.xls", ".\\")
+    shutil.copyfile("modified.xls", "conf.xls")
+
