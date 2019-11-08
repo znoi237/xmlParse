@@ -30,7 +30,12 @@ code = ""
 name = ""
 ip = ""
 port = ""
-
+sub3NumElem = 0
+sub4NumElem = 0
+sub5NumElem = 0
+websocketSub3NumElem = 0
+websocketSub4NumElem = 0
+websocketSub5NumElem = 0
 
 # Перебираем елементы верхнего уровня в массиве элементов root
 for elem in root:
@@ -86,13 +91,15 @@ if premission:
                 sqlTrig = False
                 hashNameTrig = False
                 websocketTrig = False
+                sub3NumElem = 0
     # Перебираем елементы червёртого уровня в массиве элементов root
                 for sub3 in sub2:
                     if breakStep:
                         break
                     # Ищем текст "Copy of " в имени элементов четвёртого уровня эелементов root
                     if "Copy of " in str(sub3.text):
-                        stepRename = stepRename+1
+                        jettyId = ''
+
                         # открываем файл источник на чтение
                         readWorkbook = xlrd.open_workbook('conf.xls', formatting_info=True)
                         # выбираем активный лист
@@ -132,6 +139,7 @@ if premission:
                                                                "доступных строк в источнике(xls файле)", cell)
                                     else:
                                         cell.pattern.pattern_fore_colour = 42
+                                    print(x)
                                     sheetWrite.write(x, 0, str(sheet.row_values(x)[0]), cell)
                                     sheetWrite.write(x, 1, (str(sheet.row_values(x)[1]).split("."))[0], cell)
                                     sheetWrite.write(x, 2, str(sheet.row_values(x)[2]), cell)
@@ -158,15 +166,38 @@ if premission:
 
                         mainNameTrig=True # Активируем тригер, что группа процессоров с именем содержащим "Copy of " найдена
                         i = i + 1 # !!!!!!!!!!!!!! Изменить на определение строки элемента без заливки!!!!!!!!!
+                        stepRename = stepRename + 1
     # Если тригер true - перебираем элементы пятого уровня в массиве root
                     if mainNameTrig:
+                        sub4NumElem = 0
+                        sub5NumElem = 0
                         for sub4 in sub3:
                             # Ищем элемент с именем "JettyWebSocketClient"
                             if (str(sub4.tag)=="name") and ("JettyWebSocketClient" in str(sub4.text)):
                                 sub4.text = ("JettyWebSocketClient" + code) # Перезаписываем элеент "JettyWebSocketClient" + код ММ
                                 print("sub4 tag: " + str(sub4.tag) + ", value: " + str(sub4.text))
+                                # print("sub3 val 11 "+ str(sub3[sub4NumElem-1].text)+' sub4NumElem '+str(sub4NumElem-1))
+                                jettyId = str(sub3[sub4NumElem-1].text)
+                                # sub3[websocketSub4NumElem][websocketSub5NumElem].text = jettyId
+                                print("websocketSub3NumElem " + str(websocketSub3NumElem))
+                                print("websocketSub4NumElem "+str(websocketSub4NumElem))
+                                print(" websocketSub5NumElem "+str(websocketSub5NumElem))
+                                print(" sub_4[websocketSub4NumElem] " + str(sub2[4]))
+                                print(" sub_4-19[websocketSub4NumElem] " + str(sub2[4][18]))
+                                print(" sub_4-19-5[websocketSub4NumElem] " + str(sub2[4][18][0].text))
+                                print(" sub_4-19-5[websocketSub4NumElem] " + str(sub2[4][18][1].text))
+                                sub2[websocketSub3NumElem][websocketSub4NumElem-1][1].text = jettyId
+                                # print(" sub_4-19-5[websocketSub4NumElem] " + str(sub2[4][18][2].text))
+                                # print(" sub_4-19-5[websocketSub4NumElem] " + str(sub2[4][18][3].text))
+                                # print(" sub_4-19-5[websocketSub4NumElem] " + str(sub2[4][18][4].text))
+                            sub4NumElem = sub4NumElem + 1
     # Перебираем элементы шестого уровня в массиве root
                             for sub5 in sub4:
+                                if (str(sub5.tag) == "name") and ("websocket-controller-service-id" in str(sub5.text)):
+                                    websocketSub3NumElem = sub3NumElem
+                                    websocketSub4NumElem = sub4NumElem
+                                    websocketSub5NumElem = sub5NumElem
+                                    print("sub5!!!!!!!!!!!!!!!!!!!!")
                                 # Ищем элемент 'Server_IP', активируем тригер нахождения элемента, переходим к следующему элементу массива -->
                                 if sub5.text=='Server_IP':
                                     ipTrig=True
@@ -217,6 +248,8 @@ if premission:
                                     sub5.text=("wss://10.8.37.125/ws/receive/"+code+"/")
                                     print("sub5 tag: " + str(sub5.tag) + ", value: " + str(sub5.text))
                                     websocketTrig=False
+                                sub5NumElem = sub5NumElem + 1
+                    sub3NumElem = sub3NumElem + 1
     # Перечитываем структуру массива root в tree
     tree = ET.ElementTree(root)
     with open("updated.xml", "w"): # Открываем файл updated.xml на запись. p.s. этот файл должен находиться в одной папке со скриптом
